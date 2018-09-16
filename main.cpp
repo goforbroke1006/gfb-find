@@ -5,7 +5,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 
-#define USE_MULTI_THREADING true
 #define ARGS_ERROR_MSG "Wrong args number. Usage: gfb_find /target/dir -name ([a-z0-9]{4})\\.txt"
 #define MODE_ERROR_MSG "Unexpected mode! Try to use \"-name\" or \"-content\""
 
@@ -28,25 +27,6 @@ bool matchFileContent(const fs::path &path, const boost::regex &regex);
 void searchRoutine(const fs::path &path, SearchMode mode, const boost::regex &regex);
 
 int main(int argc, char **argv) {
-    fstream file;
-    file.open("/home/goforbroke/MEGA/Java __ Golang Developer.html");
-
-    string line;
-    const boost::regex my_filter("[<]+");
-    boost::smatch xResults;
-
-    while (getline(file, line)) {
-        const string::const_iterator &first = line.begin();
-        const string::const_iterator &last = line.end();
-        if (boost::regex_search(first, last, xResults, my_filter)) {
-            std::cout << "OK" << std::endl;
-        } else {
-            std::cout << "FAIL" << std::endl;
-        }
-    }
-}
-
-int main2(int argc, char **argv) {
     if (argc != 4) {
         cerr << argc << " - " << ARGS_ERROR_MSG << endl;
         return -1;
@@ -74,25 +54,18 @@ int main2(int argc, char **argv) {
     *LOGGER << "Target dir : " << targetDir << endl;
     *LOGGER << "Mode : " << modeStr << endl;
     *LOGGER << "Pattern : " << pattern << endl;
-    *LOGGER << "Multi threading : " << (USE_MULTI_THREADING ? "ON" : "OFF") << endl;
 
     milliseconds beforeExec = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
 
     const boost::regex my_filter(pattern);
     std::vector<std::thread> ts;
 
+    ts.emplace_back(&searchRoutine, fs::path(targetDir), mode, my_filter);
+
     fs::directory_iterator it(targetDir), end_itr;
     for (; it != end_itr; ++it) {
-        if (fs::is_regular_file(it->status())) {
-            if (matchFileName(it->path(), my_filter))
-                std::cout << it->path().string() << std::endl;
-        } else {
-            if (USE_MULTI_THREADING) {
-                std::thread t = std::thread(&searchRoutine, it->path(), mode, my_filter);
-                ts.push_back(std::move(t));
-            } else {
-                searchRoutine(it->path(), mode, my_filter);
-            }
+        if (!fs::is_regular_file(it->status())) {
+            ts.emplace_back(&searchRoutine, it->path(), mode, my_filter);
         }
     }
 
@@ -118,10 +91,10 @@ bool matchFileName(const fs::path &path, const boost::regex &regex) {
 
 bool matchFileContent(const fs::path &path, const boost::regex &regex) {
     fstream f;
-    f.open(path.filename().string());
+    f.open(path.string());
     string line;
+    boost::smatch xResults;
     while (getline(f, line)) {
-        boost::smatch xResults;
         const string::const_iterator &first = line.begin();
         const string::const_iterator &last = line.end();
         if (boost::regex_search(first, last, xResults, regex)) {
@@ -141,8 +114,8 @@ void searchRoutine(const fs::path &path, SearchMode mode, const boost::regex &re
                 if (!matchFileName(it->path(), regex)) continue;
                 break;
             case SearchMode::CONTENT:
-                *LOGGER << "File : " << it->path().string() << endl;
-                if (!matchFileContent(it->path(), regex))continue;
+//                *LOGGER << "File : " << it->path().string() << endl;
+                if (!matchFileContent(it->path(), regex)) continue;
                 break;
             default:
                 continue;
