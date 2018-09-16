@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+sudo apt-get -y install valgrind
 sudo apt-get -y install curl
 
 mkdir -p ~/sources/
