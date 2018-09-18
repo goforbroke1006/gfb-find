@@ -3,7 +3,7 @@ project(gfb_find)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(gfb_find main.cpp)
+add_executable(gfb_find main.cpp threads.h)
 
 
 target_link_libraries(gfb_find

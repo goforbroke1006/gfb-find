@@ -1,9 +1,12 @@
 #include <iostream>
 #include <thread>
 #include <fstream>
+#include <future>
 #include <vector>
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
+#include <future>
+#include "threads.h"
 
 #define ARGS_ERROR_MSG "Wrong args number. Usage: gfb_find /target/dir -name ([a-z0-9]{4})\\.txt"
 #define MODE_ERROR_MSG "Unexpected mode! Try to use \"-name\" or \"-content\""
@@ -24,7 +27,7 @@ bool matchFileName(const fs::path &path, const boost::regex &regex);
 
 bool matchFileContent(const fs::path &path, const boost::regex &regex);
 
-void searchRoutine(const fs::path &path, SearchMode mode, const boost::regex &regex);
+void searchRoutine(const fs::path &path, const SearchMode &mode, const boost::regex &regex);
 
 int main(int argc, char **argv) {
     if (argc != 4) {
@@ -57,21 +60,36 @@ int main(int argc, char **argv) {
 
     milliseconds beforeExec = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
 
-    const boost::regex my_filter(pattern);
-    std::vector<std::thread> ts;
+    boost::regex my_filter(pattern);
+//    std::vector<std::thread> ts;
+    std::vector<std::future<void>> tasks;
 
-    ts.emplace_back(&searchRoutine, fs::path(targetDir), mode, my_filter);
+    Semaphore threadLimiter(std::thread::hardware_concurrency());
+
+//    searchRoutine(fs::path(targetDir), mode, my_filter);
+//    ts.emplace_back(&searchRoutine, threadLimiter, fs::path(targetDir), mode, my_filter);
+//    std::thread t(&searchRoutine, threadLimiter, fs::path(targetDir), mode, my_filter);
+//    ts.push_back(std::move(t));
+
+    tasks.emplace_back(std::async([&threadLimiter, targetDir, &mode, &my_filter] {
+        CriticalSection cs(threadLimiter);
+        searchRoutine(fs::path(targetDir), mode, my_filter);
+    }));
 
     fs::directory_iterator it(targetDir), end_itr;
     for (; it != end_itr; ++it) {
         if (!fs::is_regular_file(it->status())) {
-            ts.emplace_back(&searchRoutine, it->path(), mode, my_filter);
+            const boost::filesystem::path &path = it->path();
+            tasks.emplace_back(std::async([&threadLimiter, &path, &mode, &my_filter] {
+                CriticalSection cs(threadLimiter);
+                searchRoutine(path, mode, my_filter);
+            }));
         }
     }
 
-    *LOGGER << "Used routines : " << ts.size() << endl;
-    for (auto &t : ts) {
-        t.join();
+    *LOGGER << "Used routines : " << tasks.size() << endl;
+    for (auto &task : tasks) {
+        task.get();
     }
 
     milliseconds afterExec = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
@@ -104,18 +122,19 @@ bool matchFileContent(const fs::path &path, const boost::regex &regex) {
     return false;
 }
 
-void searchRoutine(const fs::path &path, SearchMode mode, const boost::regex &regex) {
+void searchRoutine(const fs::path &path, const SearchMode &mode, const boost::regex &regex) {
     fs::recursive_directory_iterator it(path), end_itr;
     for (; it != end_itr; ++it) {
-        if (!fs::is_regular_file(it->status())) continue;
-
+        if (!fs::is_regular_file(it->status()))
+            continue;
         switch (mode) {
             case SearchMode::NAME:
-                if (!matchFileName(it->path(), regex)) continue;
+                if (!matchFileName(it->path(), regex))
+                    continue;
                 break;
             case SearchMode::CONTENT:
-//                *LOGGER << "File : " << it->path().string() << endl;
-                if (!matchFileContent(it->path(), regex)) continue;
+                if (!matchFileContent(it->path(), regex))
+                    continue;
                 break;
             default:
                 continue;
