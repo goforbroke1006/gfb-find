@@ -29,16 +29,39 @@ bool matchFileContent(const fs::path &path, const boost::regex &regex);
 
 void searchRoutine(const fs::path &path, const SearchMode &mode, const boost::regex &regex);
 
-/*int main(int argc, char **argv) {
-    Channel<string> ch(5);
-    ch << "hello";
-    string test;
-    ch >> test;
-    cout << test << endl;
-    return 0;
-}*/
+void writeRoutine(Channel<string> &ch, __useconds_t delay, int index) {
+    while (true) {
+        ch << ("hello " + std::to_string(index));
+        usleep(delay);
+    }
+}
+
+void readRoutine(Channel<string> &ch) {
+    string s;
+    while (true) {
+        ch >> s;
+        cout << s << endl;
+    }
+}
 
 int main(int argc, char **argv) {
+    Channel<string> ch(5);
+
+    std::vector<thread> tasks;
+
+    tasks.emplace_back(writeRoutine, std::ref(ch), 500, 1);
+    tasks.emplace_back(writeRoutine, std::ref(ch), 300, 2);
+    tasks.emplace_back(writeRoutine, std::ref(ch), 250, 3);
+
+    tasks.emplace_back(readRoutine, std::ref(ch));
+
+    for (thread & t : tasks)
+        t.join();
+
+    return 0;
+}
+
+int main2(int argc, char **argv) {
     if (argc != 4) {
         cerr << argc << " - " << ARGS_ERROR_MSG << endl;
         return -1;

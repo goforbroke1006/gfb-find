@@ -52,22 +52,40 @@ class Channel {
 private:
     std::queue<T> buffer;
     size_t capacity;
-    mutex capacity_mutex;
+    mutex buffer_mutex;
+    mutex wait_not_empty_mutex;
     condition_variable cv;
 public:
-    Channel(size_t c) : capacity(c) {}
+    explicit Channel(size_t c) : capacity(c) {}
 
     void operator<<(const T obj) {
-        unique_lock<mutex> lock(capacity_mutex);
+//        cout << "-- wait for writing" << endl;
+        unique_lock<mutex> lock(buffer_mutex);
+//        cout << "-- wait for free space" << endl;
         cv.wait(lock, [this]() { return buffer.size() < capacity; });
+//        cout << "-- writing" << endl;
         buffer.push(obj);
     }
 
-    T operator>>(T &obj) {
-        unique_lock<mutex> lock(capacity_mutex);
-        const T r = buffer.front();
-        buffer.pop();
-        return r;
+    Channel<T> &operator>>(T &obj) {
+//        cout << "-- wait not empty" << endl;
+//        unique_lock<mutex> lock1(wait_not_empty_mutex);
+//        cv.wait(lock1, [this]() { return buffer.size() > 0; });
+//        cout << "-- not empty now" << endl;
+//        unique_lock<mutex> lock2(buffer_mutex);
+//        obj = buffer.front();
+//        cout << "-- read front" << endl;
+//        buffer.pop();
+//        return *this;
+        while (true) {
+            if (buffer.size() > 0) {
+                unique_lock<mutex> lock2(buffer_mutex);
+                obj = buffer.front();
+                buffer.pop();
+                break;
+            }
+        }
+        return *this;
     }
 };
 
