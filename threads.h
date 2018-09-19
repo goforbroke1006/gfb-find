@@ -7,7 +7,9 @@
 
 #include <iostream>
 #include <mutex>
+#include <vector>
 #include <condition_variable>
+#include <queue>
 
 using namespace std;
 
@@ -20,16 +22,6 @@ public:
     Semaphore(unsigned int count) noexcept {
         this->count = count;
     }
-
-    /*Semaphore(const Semaphore &other) noexcept {
-        cout << "semaphore copy" << endl;
-        this->count = other.count;
-    }
-
-    Semaphore(const Semaphore &&other) noexcept {
-        cout << "semaphore move" << endl;
-        this->count = other.count;
-    }*/
 
     void wait() { // take section
         unique_lock<mutex> lock(count_mutex);
@@ -53,6 +45,30 @@ public:
     CriticalSection(Semaphore &s) : semaphore(s) { semaphore.wait(); }
 
     ~CriticalSection() { semaphore.notify(); }
+};
+
+template<class T>
+class Channel {
+private:
+    std::queue<T> buffer;
+    size_t capacity;
+    mutex capacity_mutex;
+    condition_variable cv;
+public:
+    Channel(size_t c) : capacity(c) {}
+
+    void operator<<(const T obj) {
+        unique_lock<mutex> lock(capacity_mutex);
+        cv.wait(lock, [this]() { return buffer.size() < capacity; });
+        buffer.push(obj);
+    }
+
+    T operator>>(T &obj) {
+        unique_lock<mutex> lock(capacity_mutex);
+        const T r = buffer.front();
+        buffer.pop();
+        return r;
+    }
 };
 
 #endif //GFB_FIND_THREADS_H

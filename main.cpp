@@ -29,6 +29,15 @@ bool matchFileContent(const fs::path &path, const boost::regex &regex);
 
 void searchRoutine(const fs::path &path, const SearchMode &mode, const boost::regex &regex);
 
+/*int main(int argc, char **argv) {
+    Channel<string> ch(5);
+    ch << "hello";
+    string test;
+    ch >> test;
+    cout << test << endl;
+    return 0;
+}*/
+
 int main(int argc, char **argv) {
     if (argc != 4) {
         cerr << argc << " - " << ARGS_ERROR_MSG << endl;
@@ -61,15 +70,8 @@ int main(int argc, char **argv) {
     milliseconds beforeExec = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
 
     boost::regex my_filter(pattern);
-//    std::vector<std::thread> ts;
-    std::vector<std::future<void>> tasks;
-
     Semaphore threadLimiter(std::thread::hardware_concurrency());
-
-//    searchRoutine(fs::path(targetDir), mode, my_filter);
-//    ts.emplace_back(&searchRoutine, threadLimiter, fs::path(targetDir), mode, my_filter);
-//    std::thread t(&searchRoutine, threadLimiter, fs::path(targetDir), mode, my_filter);
-//    ts.push_back(std::move(t));
+    std::vector<std::future<void>> tasks;
 
     tasks.emplace_back(std::async([&threadLimiter, targetDir, &mode, &my_filter] {
         CriticalSection cs(threadLimiter);
